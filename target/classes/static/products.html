@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InventoryPro — Products</title>
+  <meta name="description" content="Browse, search and manage all your inventory products.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-icon">📦</div>
+    Inventory<span>Pro</span>
+  </div>
+  <nav>
+    <a href="index.html" id="nav-dashboard">
+      <span class="nav-icon">📊</span> Dashboard
+    </a>
+    <a href="products.html" class="active" id="nav-products">
+      <span class="nav-icon">🗃️</span> Products
+    </a>
+    <a href="add-product.html" id="nav-add">
+      <span class="nav-icon">➕</span> Add Product
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-version">InventoryPro v1.0</div>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Products</div>
+      <div class="page-subtitle" id="productCount">Loading products...</div>
+    </div>
+    <a href="add-product.html" class="btn btn-primary">➕ Add Product</a>
+  </div>
+
+  <div class="card">
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="🔍 Search by product name..." oninput="filterProducts()">
+      <select id="categoryFilter" onchange="filterProducts()">
+        <option value="">All Categories</option>
+        <option value="Electronics">Electronics</option>
+        <option value="Furniture">Furniture</option>
+        <option value="Stationery">Stationery</option>
+        <option value="Office">Office</option>
+      </select>
+      <button class="btn btn-light" onclick="clearFilters()">✕ Clear</button>
+    </div>
+
+    <div id="alertArea"></div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Product Name</th>
+            <th>Category</th>
+            <th>Price (₹)</th>
+            <th>Stock</th>
+            <th>Status</th>
+            <th>Added On</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="productTableBody">
+          <tr class="skel-row"><td colspan="8"><div class="skeleton skel-line" style="width:100%;height:18px;"></div></td></tr>
+          <tr class="skel-row"><td colspan="8"><div class="skeleton skel-line" style="width:90%;height:18px;"></div></td></tr>
+          <tr class="skel-row"><td colspan="8"><div class="skeleton skel-line" style="width:95%;height:18px;"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- Delete confirm dialog -->
+<div class="overlay" id="deleteOverlay">
+  <div class="dialog">
+    <h3>Delete Product?</h3>
+    <p id="deleteMsg">Are you sure you want to delete this product? This action cannot be undone.</p>
+    <div class="dialog-actions">
+      <button class="btn btn-light" onclick="closeDialog()">Cancel</button>
+      <button class="btn btn-danger" id="confirmDeleteBtn">🗑️ Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+  const API = '/api/products';
+  let allProducts = [];
+  let deleteId = null;
+
+  async function loadProducts() {
+    try {
+      allProducts = await fetch(API).then(r => r.json());
+      renderTable(allProducts);
+    } catch (e) {
+      showAlert('danger', '⚠️ Cannot connect to server. Make sure Spring Boot is running on port 8080.');
+      document.getElementById('productTableBody').innerHTML =
+        '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted)">Failed to load.</td></tr>';
+    }
+  }
+
+  function renderTable(products) {
+    const tbody = document.getElementById('productTableBody');
+    document.getElementById('productCount').textContent =
+      products.length + ' product' + (products.length !== 1 ? 's' : '') + ' found';
+
+    if (products.length === 0) {
+      tbody.innerHTML = `
+        <tr><td colspan="8">
+          <div class="empty-state">
+            <div class="icon">🔍</div>
+            <p>No products found.</p>
+            <a href="add-product.html" class="btn btn-primary">Add Product</a>
+          </div>
+        </td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = products.map((p, i) => `
+      <tr>
+        <td style="color:var(--text-muted);font-size:12px">${i + 1}</td>
+        <td>
+          <strong style="color:#fff">${p.name}</strong>
+          ${p.description ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${p.description.substring(0,50)}${p.description.length>50?'…':''}</div>` : ''}
+        </td>
+        <td><span class="badge ${catBadge(p.category)}">${p.category}</span></td>
+        <td><strong>₹${Number(p.price).toLocaleString('en-IN')}</strong></td>
+        <td class="${stockClass(p.quantity)}">${p.quantity}</td>
+        <td><span class="badge ${stockBadge(p.quantity)}">${stockLabel(p.quantity)}</span></td>
+        <td style="color:var(--text-muted);font-size:12px">${formatDate(p.createdAt)}</td>
+        <td>
+          <div style="display:flex;gap:6px">
+            <a href="add-product.html?id=${p.id}" class="btn btn-blue btn-sm">✏️ Edit</a>
+            <button class="btn btn-danger btn-sm" onclick="confirmDelete(${p.id}, '${p.name.replace(/'/g,"\\'")}')">🗑️</button>
+          </div>
+        </td>
+      </tr>`).join('');
+  }
+
+  function filterProducts() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const category = document.getElementById('categoryFilter').value;
+    const filtered = allProducts.filter(p => {
+      const matchSearch = !search || p.name.toLowerCase().includes(search) ||
+                          (p.description && p.description.toLowerCase().includes(search));
+      const matchCat = !category || p.category === category;
+      return matchSearch && matchCat;
+    });
+    renderTable(filtered);
+  }
+
+  function clearFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('categoryFilter').value = '';
+    renderTable(allProducts);
+  }
+
+  function confirmDelete(id, name) {
+    deleteId = id;
+    document.getElementById('deleteMsg').textContent =
+      `Are you sure you want to delete "${name}"? This action cannot be undone.`;
+    document.getElementById('deleteOverlay').classList.add('show');
+  }
+  function closeDialog() {
+    document.getElementById('deleteOverlay').classList.remove('show');
+    deleteId = null;
+  }
+  document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+    if (!deleteId) return;
+    closeDialog();
+    try {
+      await fetch(API + '/' + deleteId, { method: 'DELETE' });
+      showToast('✅ Product deleted successfully', 'success');
+      await loadProducts();
+    } catch (e) {
+      showToast('❌ Could not delete product', 'danger');
+    }
+  });
+
+  function showAlert(type, msg) {
+    document.getElementById('alertArea').innerHTML =
+      `<div class="alert alert-${type}">${msg}</div>`;
+  }
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast ' + type;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 3000);
+  }
+
+  function formatDate(dt) {
+    if (!dt) return '—';
+    return new Date(dt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+  }
+  function stockClass(qty)  { return qty <= 3 ? 'stock-critical' : qty < 10 ? 'stock-low' : 'stock-ok'; }
+  function stockLabel(qty)  { return qty <= 3 ? 'Critical' : qty < 10 ? 'Low Stock' : 'In Stock'; }
+  function stockBadge(qty)  { return qty <= 3 ? 'badge-red' : qty < 10 ? 'badge-orange' : 'badge-green'; }
+  function catBadge(cat) {
+    const map = { Electronics:'badge-blue', Furniture:'badge-purple', Stationery:'badge-green', Office:'badge-teal' };
+    return map[cat] || 'badge-blue';
+  }
+
+  loadProducts();
+</script>
+</body>
+</html>

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InventoryPro — Add Product</title>
+  <meta name="description" content="Add a new product or edit an existing product in the inventory.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-icon">📦</div>
+    Inventory<span>Pro</span>
+  </div>
+  <nav>
+    <a href="index.html" id="nav-dashboard">
+      <span class="nav-icon">📊</span> Dashboard
+    </a>
+    <a href="products.html" id="nav-products">
+      <span class="nav-icon">🗃️</span> Products
+    </a>
+    <a href="add-product.html" class="active" id="nav-add">
+      <span class="nav-icon">➕</span> Add Product
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-version">InventoryPro v1.0</div>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="page-header">
+    <div>
+      <div class="page-title" id="formTitle">Add Product</div>
+      <div class="page-subtitle" id="formSubtitle">Fill in the details to add a new product</div>
+    </div>
+    <a href="products.html" class="btn btn-light">← Back to Products</a>
+  </div>
+
+  <div id="alertArea"></div>
+
+  <div class="form-card">
+    <form id="productForm" onsubmit="submitForm(event)">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="name">Product Name *</label>
+          <input type="text" id="name" placeholder="e.g. Dell Laptop" required>
+        </div>
+        <div class="form-group">
+          <label for="category">Category *</label>
+          <select id="category" required>
+            <option value="">— Select Category —</option>
+            <option value="Electronics">Electronics</option>
+            <option value="Furniture">Furniture</option>
+            <option value="Stationery">Stationery</option>
+            <option value="Office">Office</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="price">Price (₹) *</label>
+          <input type="number" id="price" placeholder="e.g. 75000" min="0" step="0.01" required>
+        </div>
+        <div class="form-group">
+          <label for="quantity">Quantity / Stock *</label>
+          <input type="number" id="quantity" placeholder="e.g. 15" min="0" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="description">Description</label>
+        <textarea id="description" placeholder="Optional: brief product description..."></textarea>
+      </div>
+
+      <div style="display:flex;gap:12px;align-items:center;margin-top:8px">
+        <button type="submit" class="btn btn-primary" id="submitBtn">💾 Save Product</button>
+        <a href="products.html" class="btn btn-light">Cancel</a>
+        <span id="saving" style="display:none;color:var(--text-muted);font-size:14px">Saving...</span>
+      </div>
+    </form>
+  </div>
+</main>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+  const API = '/api/products';
+  const params = new URLSearchParams(window.location.search);
+  const editId = params.get('id');
+
+  if (editId) {
+    document.getElementById('formTitle').textContent = 'Edit Product';
+    document.getElementById('formSubtitle').textContent = 'Update the product details below';
+    document.getElementById('submitBtn').textContent = '💾 Update Product';
+    document.title = 'InventoryPro — Edit Product';
+    loadProduct(editId);
+  }
+
+  async function loadProduct(id) {
+    try {
+      const p = await fetch(API + '/' + id).then(r => r.json());
+      document.getElementById('name').value        = p.name;
+      document.getElementById('category').value    = p.category;
+      document.getElementById('price').value       = p.price;
+      document.getElementById('quantity').value    = p.quantity;
+      document.getElementById('description').value = p.description || '';
+    } catch (e) {
+      showAlert('danger', '⚠️ Failed to load product. It may not exist.');
+    }
+  }
+
+  async function submitForm(e) {
+    e.preventDefault();
+    const name     = document.getElementById('name').value.trim();
+    const category = document.getElementById('category').value;
+    const price    = parseFloat(document.getElementById('price').value);
+    const quantity = parseInt(document.getElementById('quantity').value);
+    const description = document.getElementById('description').value.trim();
+
+    if (!name || !category || isNaN(price) || isNaN(quantity)) {
+      showAlert('danger', '⚠️ Please fill in all required fields.');
+      return;
+    }
+
+    const body = { name, category, price, quantity, description };
+    const btn = document.getElementById('submitBtn');
+    const saving = document.getElementById('saving');
+    btn.disabled = true;
+    saving.style.display = 'inline';
+
+    try {
+      if (editId) {
+        await fetch(API + '/' + editId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        showToast('✅ Product updated successfully!', 'success');
+      } else {
+        await fetch(API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        showToast('✅ Product added successfully!', 'success');
+        document.getElementById('productForm').reset();
+      }
+      setTimeout(() => { window.location.href = 'products.html'; }, 1200);
+    } catch (err) {
+      showAlert('danger', '❌ Failed to save product. Please check your connection.');
+    } finally {
+      btn.disabled = false;
+      saving.style.display = 'none';
+    }
+  }
+
+  function showAlert(type, msg) {
+    const area = document.getElementById('alertArea');
+    area.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+    area.scrollIntoView({ behavior: 'smooth' });
+  }
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast ' + type;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 3000);
+  }
+</script>
+</body>
+</html>
