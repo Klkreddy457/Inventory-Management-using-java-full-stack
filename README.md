@@ -1,6 +1,6 @@
-# InventoryPro — Product & Inventory Management System
+# InventoryPro — Product & Inventory Management System 
 
-A full-stack Java web application built with Spring Boot, MySQL, and static HTML/CSS/JS.
+A full-stack Java web application built with Spring Boot, MySQL, and static HTML/CSS/JS, bulit by using AI.
 
 ---
 
@@ -105,3 +105,6 @@ src/
 │           ├── add-product.html  (Add/Edit form)
 │           └── style.css         (Shared styles)
 ```
+
+
+bulit by using AI
